@@ -15,7 +15,12 @@ import DialogTitle from '@mui/material/DialogTitle';
 import TextField from '@mui/material/TextField';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import CircularProgress from '@mui/material/CircularProgress'; // Importing CircularProgress for loading spinner
+import CircularProgress from '@mui/material/CircularProgress';
+import IconButton from '@mui/material/IconButton';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import Snackbar from '@mui/material/Snackbar';
+import MuiAlert from '@mui/material/Alert';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -25,22 +30,26 @@ export default function App() {
   const [currentIndex, setCurrentIndex] = useState(null);
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
-  const [loading, setLoading] = useState(false); // Loading state
+  const [loading, setLoading] = useState(false);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [snackbarMessage, setSnackbarMessage] = useState('');
+  const [snackbarSeverity, setSnackbarSeverity] = useState('success');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
 
   useEffect(() => {
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
-    setLoading(true); // Set loading to true
+    setLoading(true);
     try {
       const response = await axios.get(API_URL);
       setUsers(response.data.data);
     } catch (error) {
-      console.error('Error fetching users:', error);
-      alert('Error fetching users. Please try again later.'); // Notify user of error
+      triggerSnackbar('Error fetching users. Please try again later.', 'error');
     } finally {
-      setLoading(false); // Set loading to false
+      setLoading(false);
     }
   };
 
@@ -55,51 +64,67 @@ export default function App() {
     setOpen(false);
   };
 
+  const handleSnackbarClose = () => {
+    setSnackbarOpen(false);
+  };
+
+  const triggerSnackbar = (message, severity) => {
+    setSnackbarMessage(message);
+    setSnackbarSeverity(severity);
+    setSnackbarOpen(true);
+  };
+
   const handleSave = async () => {
     if (!newName || !newEmail) {
-      alert('Please fill out both fields!'); // Simple validation
+      triggerSnackbar('Please fill out both fields!', 'warning');
       return;
     }
 
-    // Basic email format validation
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailPattern.test(newEmail)) {
-      alert('Please enter a valid email address!');
+      triggerSnackbar('Please enter a valid email address!', 'warning');
       return;
     }
 
     const user = { name: newName, email: newEmail };
-    setLoading(true); // Set loading to true
+    setLoading(true);
     try {
       if (currentIndex !== null) {
-        await axios.put(`${API_URL}/${users[currentIndex]._id}`, user); // Updated for MongoDB
+        await axios.put(`${API_URL}/${users[currentIndex]._id}`, user);
       } else {
         await axios.post(API_URL, user);
       }
       fetchUsers();
-      alert('User saved successfully!'); // Success message
+      triggerSnackbar('User saved successfully!', 'success');
     } catch (error) {
-      console.error('Error saving user:', error);
-      alert('Error saving user. Please try again.'); // Notify user of error
+      triggerSnackbar('Error saving user. Please try again.', 'error');
     } finally {
-      setLoading(false); // Set loading to false
+      setLoading(false);
+      handleClose();
     }
-    handleClose();
   };
 
-  const handleDelete = async (index) => {
-    if (window.confirm("Are you sure you want to delete this user?")) {
-      setLoading(true); // Set loading to true
-      try {
-        await axios.delete(`${API_URL}/${users[index]._id}`); // Updated for MongoDB
-        fetchUsers();
-        alert('User deleted successfully!'); // Success message
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        alert('Error deleting user. Please try again.'); // Notify user of error
-      } finally {
-        setLoading(false); // Set loading to false
-      }
+  const handleDeleteDialogOpen = (index) => {
+    setUserToDelete(users[index]);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteDialogClose = () => {
+    setDeleteDialogOpen(false);
+    setUserToDelete(null);
+  };
+
+  const handleDelete = async () => {
+    setLoading(true);
+    try {
+      await axios.delete(`${API_URL}/${userToDelete._id}`);
+      fetchUsers();
+      triggerSnackbar('User deleted successfully!', 'success');
+    } catch (error) {
+      triggerSnackbar('Error deleting user. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+      handleDeleteDialogClose();
     }
   };
 
@@ -112,18 +137,21 @@ export default function App() {
 
   return (
     <>
-      <h1 style={{ textAlign: 'center', fontFamily: 'sans-serif' }}>User Management</h1>
-      <Button 
-        variant="contained" 
-        color="primary" 
-        onClick={handleAddUser} 
-        style={{ margin: '20px', marginLeft: '25%' }}
-        disabled={loading} // Disable button during loading
-      >
-        Add User
-      </Button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 40px' }}>
+        <h1 style={{ fontFamily: 'Arial', fontWeight: 'bold', color: '#333' }}>CRUD APP USING MERN</h1>
+        <Button 
+          variant="contained" 
+          color="primary" 
+          onClick={handleAddUser} 
+          style={{ textTransform: 'none', fontWeight: 'bold' }}
+          disabled={loading}
+        >
+          Add User
+        </Button>
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <TableContainer component={Paper} style={{ width: '50%' }}>
+        <TableContainer component={Paper} style={{ width: '80%', overflowX: 'auto' }}>
           <Table sx={{ minWidth: 200 }} aria-label="simple table">
             <TableHead>
               <TableRow>
@@ -133,37 +161,35 @@ export default function App() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {loading ? ( // Show loading indicator while loading
+              {loading ? (
                 <TableRow>
                   <TableCell colSpan={3} align="center">
-                    <CircularProgress /> {/* Display loading spinner */}
+                    <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : (
                 users.map((row, index) => (
-                  <TableRow key={row._id}> {/* Updated key to use _id from MongoDB */}
+                  <TableRow key={row._id}>
                     <TableCell component="th" scope="row">
                       {row.name}
                     </TableCell>
                     <TableCell>{row.email}</TableCell>
                     <TableCell>
-                      <Button 
-                        variant="contained" 
+                      <IconButton 
                         color="primary" 
                         onClick={() => handleClickOpen(index)} 
                         style={{ marginRight: '10px' }}
-                        disabled={loading} // Disable button during loading
+                        disabled={loading}
                       >
-                        Edit
-                      </Button>
-                      <Button 
-                        variant="contained" 
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton 
                         color="secondary" 
-                        onClick={() => handleDelete(index)}
-                        disabled={loading} // Disable button during loading
+                        onClick={() => handleDeleteDialogOpen(index)}
+                        disabled={loading}
                       >
-                        Delete
-                      </Button>
+                        <DeleteIcon />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))
@@ -177,22 +203,24 @@ export default function App() {
         <DialogTitle>{currentIndex !== null ? "Edit User" : "Add User"}</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            {currentIndex !== null ? 'Edit the details of the user.' : 'Enter the details of the new user.'}
+            {currentIndex !== null ? 'Edit the details of the user.' : 'Add a new user.'}
           </DialogContentText>
           <TextField
             autoFocus
             margin="dense"
+            id="name"
             label="Name"
-            type="text"
             fullWidth
+            variant="standard"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
           />
           <TextField
             margin="dense"
+            id="email"
             label="Email"
-            type="email"
             fullWidth
+            variant="standard"
             value={newEmail}
             onChange={(e) => setNewEmail(e.target.value)}
           />
@@ -201,11 +229,40 @@ export default function App() {
           <Button onClick={handleClose} color="primary">
             Cancel
           </Button>
-          <Button onClick={handleSave} color="primary" disabled={loading}> {/* Disable button during loading */}
+          <Button onClick={handleSave} color="primary" disabled={loading}>
             Save
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={handleDeleteDialogClose}>
+        <DialogTitle>Delete User</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete {userToDelete?.name}?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteDialogClose} color="primary">
+            Cancel
+          </Button>
+          <Button onClick={handleDelete} color="secondary" disabled={loading}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={4000}
+        onClose={handleSnackbarClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <MuiAlert onClose={handleSnackbarClose} severity={snackbarSeverity} sx={{ width: '100%' }}>
+          {snackbarMessage}
+        </MuiAlert>
+      </Snackbar>
     </>
   );
 }
